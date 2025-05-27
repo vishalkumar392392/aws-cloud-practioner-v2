@@ -1,6 +1,9 @@
 //AMI_EC2_USER_DATA
 
 // we have AMI pre installed with java,maven, git ...we are cloning spring boot repo and configuring the database url
+
+#!/bin/bash
+# Update the system packages
 git clone https://github.com/vishalkumar392392/aws-cloud-practioner-v2.git
 sudo su
 cd aws-cloud-practioner-v2/
