@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EC2 with Spring Boot AMI, no key pair, and full SG access
+
+Resources:
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH, HTTP, HTTPS, MySQL, and custom ports
+      VpcId: vpc-0481382a2919cabc9
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  MyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: subnet-050cfb6d7966c030c
+      ImageId: ami-077a68795872b9565
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref MySecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          git clone https://github.com/vishalkumar392392/aws-cloud-practioner-v2.git
+          cd aws-cloud-practioner-v2/
+          mvn clean package -Dmaven.test.skip=true
+          cd target/
+          java -jar *.jar --spring.datasource.url=jdbc:mysql://13.220.52.105:3306/school
