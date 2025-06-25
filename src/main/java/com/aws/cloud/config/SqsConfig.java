@@ -7,8 +7,6 @@ import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
@@ -24,22 +22,14 @@ import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRespon
 
 @Configuration
 public class SqsConfig {
-	
-	@Value("${aws.access.key}")
-    private String accessKey;
-
-    @Value("${aws.secret.key}")
-    private String secretKey;
     
     @Value("${aws.secret.name}")
     private String secretName;
     
     @Bean
     public AmazonSQS amazonSQSClient() {
-        BasicAWSCredentials awsCredentials = new BasicAWSCredentials(accessKey, secretKey);
-//        System.out.println(getSecret());
         return AmazonSQSClientBuilder.standard()
-                .withCredentials(new AWSStaticCredentialsProvider(awsCredentials))
+                .withCredentials(new com.amazonaws.auth.DefaultAWSCredentialsProviderChain())
                 .withRegion(Regions.US_EAST_1)
                 .build();
     }

@@ -22,8 +22,8 @@ public class Consumer {
 	        this.amazonSQSClient = amazonSQSClient;
 	    }
 
-	    @Scheduled(fixedDelay = 5000) // It runs every 5 seconds.
-	    public void consumeMessages() {
+	    @Scheduled(cron = "*/2 * * * * *") // It runs every 2 seconds.
+	    public String consumeMessages() {
 	        try {
 	            String queueUrl = amazonSQSClient.getQueueUrl(queueName).getQueueUrl();
 
@@ -33,11 +33,13 @@ public class Consumer {
 	                com.amazonaws.services.sqs.model.Message message = receiveMessageResult.getMessages().get(0);
 	                log.info("Read Message from queue: {}", message.getBody());
 	                amazonSQSClient.deleteMessage(queueUrl, message.getReceiptHandle());
+	                return message.getBody();
 	            }
 
 	        } catch (Exception e) {
 	            log.error("Queue Exception Message: {}", e.getMessage());
 	        }
+	        return null;
 	    }
 
 }
