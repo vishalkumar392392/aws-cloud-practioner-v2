@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Spring Boot App with ALB, Auto Scaling Group, CloudWatch Logs, Secrets Manager, and SQS
+
+Resources:
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH, HTTP, HTTPS, MySQL, and custom ports
+      VpcId: vpc-0481382a2919cabc9
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP access to Load Balancer
+      VpcId: vpc-0481382a2919cabc9
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: MySpringBootALB
+      Subnets:
+        - subnet-050cfb6d7966c030c
+        - subnet-0252389a16e6033e0
+        - subnet-01572867f987c92be
+      SecurityGroups:
+        - !Ref ELBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+
+  MyTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: SpringBootTG
+      Port: 80
+      Protocol: HTTP
+      VpcId: vpc-0481382a2919cabc9
+      TargetType: instance
+      HealthCheckPath: /students
+      HealthCheckPort: traffic-port
+      HealthCheckProtocol: HTTP
+      Matcher:
+        HttpCode: 200
+
+  MyListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref MyLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MyTargetGroup
+
+  MySecretsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: SecretsManagerAndSQSAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: arn:aws:secretsmanager:us-east-1:221082203021:secret:aws-dev*
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:SendMessage
+                Resource: arn:aws:sqs:us-east-1:221082203021:spring-boot-aws-queue
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::pallavishal
+                  - arn:aws:s3:::pallavishal/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  MyInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MySecretsRole
+      Path: "/"
+
+  MyLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: SpringBootLT
+      LaunchTemplateData:
+        ImageId: ami-0c101f26f147fa7fd
+        InstanceType: t2.medium
+        IamInstanceProfile:
+          Name: !Ref MyInstanceProfile
+        SecurityGroupIds:
+          - !Ref MySecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install wget -y
+            yum install -y amazon-cloudwatch-agent
+            yum install -y java-17-amazon-corretto
+            yum remove -y maven
+            yum install -y maven git wget
+
+            git clone https://github.com/vishalkumar392392/aws-cloud-practioner-v2.git
+            cd aws-cloud-practioner-v2/
+            mvn clean package -Dmaven.test.skip=true
+            cd target/
+            mkdir -p /opt/springbootapp/
+            cp *.jar /opt/springbootapp/app.jar
+            mkdir -p /opt/springbootapp/logs/
+
+            nohup java -jar /opt/springbootapp/app.jar > /opt/springbootapp/logs/app.log 2>&1 &
+
+            cat > /opt/cloudwatch-config.json <<EOF
+            {
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/opt/springbootapp/logs/app.log",
+                        "log_group_name": "/aws/ec2/springboot-app",
+                        "log_stream_name": "{instance_id}-app-log",
+                        "timestamp_format": "%Y-%m-%d %H:%M:%S"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config \
+              -m ec2 \
+              -c file:/opt/cloudwatch-config.json \
+              -s
+
+  MyAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - subnet-050cfb6d7966c030c
+        - subnet-0252389a16e6033e0
+      LaunchTemplate:
+        LaunchTemplateId: !Ref MyLaunchTemplate
+        Version: !GetAtt MyLaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref MyTargetGroup
+      MetricsCollection:
+        - Granularity: "1Minute"
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+
+  MyScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref MyAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 50.0
+        DisableScaleIn: false
+
+  MyAppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/ec2/springboot-app
+      RetentionInDays: 7
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Load Balancer
+    Value: !GetAtt MyLoadBalancer.DNSName
