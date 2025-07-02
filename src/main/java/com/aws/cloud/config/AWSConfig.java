@@ -17,11 +17,19 @@ import com.aws.cloud.model.Secrets;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
+import jakarta.persistence.EntityManagerFactory;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
+import java.util.Properties;
+
 
 @Configuration
 public class AWSConfig {
@@ -38,11 +46,58 @@ public class AWSConfig {
 
 	@Bean
 	public DataSource dataSource() throws JsonMappingException, JsonProcessingException {
+		Secrets secrets = this.secrets();
+		
+		HikariConfig config = new HikariConfig();
+
+        config.setJdbcUrl(secrets.getDatasourceUrl());
+        config.setUsername(secrets.getUsername());
+        config.setPassword(secrets.getPassword());
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(5);
+        config.setIdleTimeout(300_000);
+        config.setMaxLifetime(1_800_000);
+        config.setConnectionTimeout(30_000);
+        config.setKeepaliveTime(60_000);
+        config.setValidationTimeout(5_000);
+
+        config.setConnectionTestQuery("SELECT 1");
+        config.addDataSourceProperty("testWhileIdle", "true");
+        config.addDataSourceProperty("testOnBorrow", "true");
+
+        return new HikariDataSource(config);
+		
+	}
+	
+    @Bean
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
+        LocalContainerEntityManagerFactoryBean factoryBean = new LocalContainerEntityManagerFactoryBean();
+        factoryBean.setDataSource(dataSource);
+        factoryBean.setPackagesToScan("com.aws.cloud"); // Replace with your entity package
+        factoryBean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+
+        Properties jpaProperties = new Properties();
+        jpaProperties.put("hibernate.dialect", "org.hibernate.dialect.MySQL8Dialect");
+        jpaProperties.put("hibernate.hbm2ddl.auto", "update");
+        jpaProperties.put("hibernate.show_sql", "true");
+
+        factoryBean.setJpaProperties(jpaProperties);
+        return factoryBean;
+    }
+
+    @Bean
+    public JpaTransactionManager transactionManager(EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+
+	@Bean
+	public Secrets secrets() throws JsonMappingException, JsonProcessingException {
 		String secrets = getSecret();
 		ObjectMapper obj = new ObjectMapper();
 		Secrets allSecrets = obj.readValue(secrets, Secrets.class);
-		return DataSourceBuilder.create().url(allSecrets.getDatasourceUrl()).username(allSecrets.getUsername())
-				.password(allSecrets.getPassword()).build();
+		return allSecrets;
 	}
 
 	@Bean
