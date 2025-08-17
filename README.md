@@ -9,14 +9,16 @@ In this spring boot application we integrated AWS services like S3, Secretsmanag
   4. We are just mentioning secret-name of AWS SecretsManager which is not a problem.
 # How to run the Application in local
   1. Start the EC2 Instance in which database was provisoined in us-east-1.
-  2. If it exists, delete the /aws/ec2/springboot-app entry from the CloudWatch log groups.
-  3. We have download aws cli and configure with accessKey and secretkey in our local, then aws creds will store inside our localmachine under ./aws/credentials.
-  4. So when our spring boot starts, it fetches details from ./aws/credentials and connects to AWS.
+  2. Update the new database url in AWS Secrets manager secret.
+  3. If it exists, delete the /aws/ec2/springboot-app entry from the CloudWatch log groups.
+  4. We have download aws cli and configure with accessKey and secretkey in our local, then aws creds will store inside our localmachine under ./aws/credentials.
+  5. So when our spring boot starts, it fetches details from ./aws/credentials and connects to AWS.
 # How to run the Application in AWS/CLOUD
   1. Start the EC2 Instance in which database was provisoined in us-east-1.
-  2. If it exists, delete the /aws/ec2/springboot-app entry from the CloudWatch log groups.
-  3. We created an AWS CloudFormation template in which we configured traditional web application architecture.
-  4. We configured AWS IAM roles for permissions to connect with Cloudwatch, SQS, SecretsManager, S3 and security policies and installing java,     cloudwatchagent,maven,and configured EC2 instance, ALB, ASG.
+  2. Update the new database url in AWS Secrets manager secret.
+  3. If it exists, delete the /aws/ec2/springboot-app entry from the CloudWatch log groups.
+  4. We created an AWS CloudFormation template in which we configured traditional web application architecture.
+  5. We configured AWS IAM roles for permissions to connect with Cloudwatch, SQS, SecretsManager, S3 and security policies and installing java,     cloudwatchagent,maven,and configured EC2 instance, ALB, ASG.
 
      <img width="987" alt="image" src="https://github.com/user-attachments/assets/61473915-304e-4746-9eb7-b5050fa02664" />
 
