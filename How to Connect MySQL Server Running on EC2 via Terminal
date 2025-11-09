@@ -1,0 +1,6 @@
+1. SSH into EC2 Instance.
+2. Execute command "mysql -u root -p".
+3. Give the Password.
+4. SHOW DATABASES;
+5. USE SCHOOL;
+6. SELECT * FROM STUDENTS;
